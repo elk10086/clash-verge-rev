@@ -174,6 +174,45 @@ fn shell_single_quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', r"'\''"))
 }
 
+/// Stage service tools under `/tmp` before elevation.
+///
+/// Elevated `osascript` processes cannot read from TCC-protected locations
+/// such as Documents, so installers must not be invoked from there directly.
+#[cfg(target_os = "macos")]
+fn stage_macos_service_tools() -> Result<PathBuf> {
+    let binary_path = dirs::service_path()?;
+    let resource_dir = binary_path
+        .parent()
+        .map(Path::to_path_buf)
+        .context("service resource directory missing")?;
+
+    let stage_dir = PathBuf::from("/tmp").join(format!("clash-verge-service-stage-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&stage_dir);
+    std::fs::create_dir_all(&stage_dir).context("failed to create service stage directory")?;
+
+    for name in [
+        "clash-verge-service",
+        "clash-verge-service-install",
+        "clash-verge-service-uninstall",
+    ] {
+        let src = resource_dir.join(name);
+        if !src.exists() {
+            bail!("service tool not found: {src:?}");
+        }
+        let dst = stage_dir.join(name);
+        std::fs::copy(&src, &dst).with_context(|| format!("failed to stage service tool: {name}"))?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt as _;
+            let mut perms = std::fs::metadata(&dst)?.permissions();
+            perms.set_mode(0o755);
+            std::fs::set_permissions(&dst, perms)?;
+        }
+    }
+
+    Ok(stage_dir)
+}
+
 #[cfg(target_os = "windows")]
 fn uninstall_service() -> Result<()> {
     logging!(info, Type::Service, "uninstall service");
@@ -355,8 +394,11 @@ fn linux_running_as_root() -> bool {
 fn uninstall_service() -> Result<()> {
     logging!(info, Type::Service, "uninstall service");
 
-    let binary_path = dirs::service_path()?;
-    let uninstall_path = binary_path.with_file_name("clash-verge-service-uninstall");
+    let stage_dir = stage_macos_service_tools()?;
+    defer! {
+        let _ = std::fs::remove_dir_all(&stage_dir);
+    }
+    let uninstall_path = stage_dir.join("clash-verge-service-uninstall");
 
     if !uninstall_path.exists() {
         bail!(format!("uninstaller not found: {uninstall_path:?}"));
@@ -391,8 +433,11 @@ fn uninstall_service() -> Result<()> {
 fn install_service() -> Result<()> {
     logging!(info, Type::Service, "install service");
 
-    let binary_path = dirs::service_path()?;
-    let install_path = binary_path.with_file_name("clash-verge-service-install");
+    let stage_dir = stage_macos_service_tools()?;
+    defer! {
+        let _ = std::fs::remove_dir_all(&stage_dir);
+    }
+    let install_path = stage_dir.join("clash-verge-service-install");
 
     if !install_path.exists() {
         bail!(format!("installer not found: {install_path:?}"));

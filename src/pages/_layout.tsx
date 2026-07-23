@@ -35,7 +35,6 @@ import { BaseErrorBoundary } from '@/components/base'
 import { LayoutItem } from '@/components/layout/layout-item'
 import { LayoutTraffic } from '@/components/layout/layout-traffic'
 import { NoticeManager } from '@/components/layout/notice-manager'
-import { UpdateButton } from '@/components/layout/update-button'
 import {
   WindowControls,
   WindowResizeHandles,
@@ -332,7 +331,6 @@ const Layout = () => {
                 />
                 <LogoSvg fill={isDark ? 'white' : 'black'} />
               </div>
-              <UpdateButton className="the-newbtn" />
             </div>
 
             {menuUnlocked && (
