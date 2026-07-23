@@ -48,6 +48,10 @@ env:
   HUSKY: 0
   # Keep service binary aligned with clash_verge_service_ipc = 2.3.3
   SERVICE_VERSION_PIN: v2.3.3
+  # Match release/autobuild; rustc 1.95.0 + codegen-units=1 can SIGTRAP in LLVM.
+  RUSTUP_TOOLCHAIN: '1.97.1'
+  CARGO_PROFILE_RELEASE_CODEGEN_UNITS: 16
+  CARGO_PROFILE_RELEASE_DEBUG: '0'
 
 concurrency:
   group: package-${{ github.ref }}
@@ -159,7 +163,7 @@ jobs:
         if: ${{ github.event.inputs[matrix.input] == 'true' }}
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: '1.95.0'
+          toolchain: '1.97.1'
           targets: ${{ matrix.target }}
 
       - name: Add Rust target
@@ -170,7 +174,7 @@ jobs:
         if: ${{ github.event.inputs[matrix.input] == 'true' }}
         uses: Swatinem/rust-cache@v2
         with:
-          prefix-key: package-v1
+          prefix-key: package-v2
           key: ${{ matrix.os }}-${{ matrix.target }}
           workspaces: |
             . -> target
