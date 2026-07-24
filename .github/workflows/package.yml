@@ -218,6 +218,7 @@ jobs:
           ).strip()
           root = Path(libdir)
           # Keep tray dlopen() on AppImage libs (same glib ABI) instead of host /usr/lib.
+          # Tauri map is: destination_in_appimage -> source_on_host (see AppImage docs).
           names = [
               "libayatana-appindicator3.so.1",
               "libayatana-indicator3.so.7",
@@ -234,8 +235,9 @@ jobs:
                   if not matches:
                       raise SystemExit(f"missing tray library: {src}")
                   src = matches[0]
-              files[str(src)] = f"lib/{src.name}"
-              print(f"bundle {src} -> lib/{src.name}")
+              dest = f"/usr/lib/{src.name}"
+              files[dest] = str(src.resolve())
+              print(f"bundle {src} -> {dest}")
 
           path = Path("src-tauri/tauri.linux.conf.json")
           data = json.loads(path.read_text())
