@@ -23,6 +23,26 @@ pub fn apply_nvidia_dmabuf_renderer_workaround() {
     }
 }
 
+/// AppImage + WebKitGTK frequently hits EGL_BAD_PARAMETER / blank windows on
+/// mixed GPU stacks; prefer the safer software path unless the user overrides.
+pub fn apply_appimage_webkit_workaround() {
+    if std::env::var_os("APPIMAGE").is_none() {
+        return;
+    }
+    if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_some() {
+        return;
+    }
+
+    unsafe {
+        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+    }
+    logging!(
+        info,
+        Type::Setup,
+        "Detected AppImage, set WEBKIT_DISABLE_DMABUF_RENDERER=1"
+    );
+}
+
 /// !Might cause more memory footpoint
 pub fn apply_wayland_webkit_fix() {
     let is_wayland = env::var("XDG_SESSION_TYPE").unwrap_or_default() == "wayland";

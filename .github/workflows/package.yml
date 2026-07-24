@@ -145,7 +145,8 @@ jobs:
             artifact: linux-amd64
             path: target/x86_64-unknown-linux-gnu/release/bundle/deb/*.deb
           - id: linux-amd64-appimage
-            os: ubuntu-22.04
+            # Newer glib reduces tray symbol mismatches on modern host distros.
+            os: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
             bundle: appimage
             input: run_linux_amd64_appimage
@@ -194,13 +195,54 @@ jobs:
           cache-all-crates: true
 
       - name: Install Linux deps (amd64)
-        if: ${{ matrix.os == 'ubuntu-22.04' && matrix.cross != true && github.event.inputs[matrix.input] == 'true' }}
+        if: ${{ startsWith(matrix.os, 'ubuntu') && matrix.cross != true && github.event.inputs[matrix.input] == 'true' }}
         run: |
           sudo apt-get update
           sudo apt-get install -y libxslt1.1 libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
           if [ "${{ matrix.appimage }}" = "true" ]; then
-            sudo apt-get install -y libfuse2
+            # Ubuntu 24.04 renames the package; fall back for 22.04.
+            sudo apt-get install -y libfuse2t64 || sudo apt-get install -y libfuse2
           fi
+
+      - name: Bundle AppImage tray libraries
+        if: ${{ matrix.appimage == true && github.event.inputs[matrix.input] == 'true' }}
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json, subprocess
+          from pathlib import Path
+
+          libdir = subprocess.check_output(
+              ["pkg-config", "--variable=libdir", "ayatana-appindicator3-0.1"],
+              text=True,
+          ).strip()
+          root = Path(libdir)
+          # Keep tray dlopen() on AppImage libs (same glib ABI) instead of host /usr/lib.
+          names = [
+              "libayatana-appindicator3.so.1",
+              "libayatana-indicator3.so.7",
+              "libayatana-ido3-0.4.so.0",
+              "libdbusmenu-glib.so.4",
+              "libdbusmenu-gtk3.so.4",
+          ]
+          files = {}
+          for name in names:
+              src = root / name
+              if not src.exists():
+                  # Some sonames differ slightly across Ubuntu versions.
+                  matches = sorted(root.glob(name.split(".so")[0] + ".so*"))
+                  if not matches:
+                      raise SystemExit(f"missing tray library: {src}")
+                  src = matches[0]
+              files[str(src)] = f"lib/{src.name}"
+              print(f"bundle {src} -> lib/{src.name}")
+
+          path = Path("src-tauri/tauri.linux.conf.json")
+          data = json.loads(path.read_text())
+          data.setdefault("bundle", {}).setdefault("linux", {}).setdefault("appimage", {})["files"] = files
+          path.write_text(json.dumps(data, indent=2) + "\n")
+          print("updated tauri.linux.conf.json appimage.files")
+          PY
 
       - name: Install Linux deps (arm64 cross)
         if: ${{ matrix.cross == true && github.event.inputs[matrix.input] == 'true' }}
