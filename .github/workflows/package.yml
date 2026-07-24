@@ -24,12 +24,17 @@ on:
         type: boolean
         default: true
       run_linux_amd64:
-        description: 'Linux amd64'
+        description: 'Linux amd64 (deb)'
+        required: false
+        type: boolean
+        default: true
+      run_linux_amd64_appimage:
+        description: 'Linux amd64 (AppImage)'
         required: false
         type: boolean
         default: true
       run_linux_arm64:
-        description: 'Linux arm64'
+        description: 'Linux arm64 (deb)'
         required: false
         type: boolean
         default: true
@@ -139,6 +144,14 @@ jobs:
             input: run_linux_amd64
             artifact: linux-amd64
             path: target/x86_64-unknown-linux-gnu/release/bundle/deb/*.deb
+          - id: linux-amd64-appimage
+            os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            bundle: appimage
+            input: run_linux_amd64_appimage
+            artifact: linux-amd64-appimage
+            path: target/x86_64-unknown-linux-gnu/release/bundle/appimage/*.AppImage
+            appimage: true
           - id: linux-arm64
             os: ubuntu-22.04
             target: aarch64-unknown-linux-gnu
@@ -185,6 +198,9 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libxslt1.1 libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+          if [ "${{ matrix.appimage }}" = "true" ]; then
+            sudo apt-get install -y libfuse2
+          fi
 
       - name: Install Linux deps (arm64 cross)
         if: ${{ matrix.cross == true && github.event.inputs[matrix.input] == 'true' }}
@@ -278,6 +294,8 @@ jobs:
         shell: bash
         env:
           NODE_OPTIONS: '--max_old_space_size=4096'
+          # linuxdeploy's bundled strip breaks on modern ELF (.relr.dyn); required for AppImage.
+          NO_STRIP: ${{ matrix.appimage == true && 'true' || '' }}
           PKG_CONFIG_ALLOW_CROSS: ${{ matrix.cross == true && '1' || '' }}
           PKG_CONFIG_PATH: ${{ matrix.cross == true && '/usr/lib/aarch64-linux-gnu/pkgconfig/' || '' }}
           PKG_CONFIG_SYSROOT_DIR: ${{ matrix.cross == true && '/usr/aarch64-linux-gnu/' || '' }}
