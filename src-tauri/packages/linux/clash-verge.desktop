@@ -1,7 +1,7 @@
 [Desktop Entry]
 Categories={{{categories}}}
 Comment={{{comment}}}
-Exec={{{exec}}} %u
+Exec=env WEBKIT_DISABLE_DMABUF_RENDERER=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 {{{exec}}} %u
 StartupWMClass=clash-verge
 Icon={{{icon}}}
 Name={{{name}}}

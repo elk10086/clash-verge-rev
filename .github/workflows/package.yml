@@ -358,6 +358,13 @@ jobs:
                 TAURI_SIGNING_PRIVATE_KEY_PASSWORD || true
           pnpm build --target "${{ matrix.target }}" -b "${{ matrix.bundle }}"
 
+      - name: Patch AppImage for WebKit blank window
+        if: ${{ matrix.appimage == true && github.event.inputs[matrix.input] == 'true' }}
+        shell: bash
+        run: |
+          chmod +x scripts/patch-appimage-webkit.sh
+          scripts/patch-appimage-webkit.sh target/${{ matrix.target }}/release/bundle/appimage/*.AppImage
+
       - name: Upload artifact
         if: ${{ github.event.inputs[matrix.input] == 'true' }}
         uses: actions/upload-artifact@v4
