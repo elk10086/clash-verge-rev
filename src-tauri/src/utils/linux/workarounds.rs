@@ -6,41 +6,43 @@
 use clash_verge_logging::{Type, logging};
 use std::{env, fs, path::Path, process::Command};
 
-pub fn apply_nvidia_dmabuf_renderer_workaround() {
-    if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_some() {
-        return;
+fn set_env_default(key: &str, value: &str) -> bool {
+    if env::var_os(key).is_some() {
+        return false;
     }
+    unsafe {
+        env::set_var(key, value);
+    }
+    true
+}
 
-    if has_nvidia_gpu() {
-        unsafe {
-            std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
-        }
+fn enable_webkit_safe_renderer(reason: &str) {
+    let mut changed = false;
+    // Blank WebView on Linux is commonly caused by WebKitGTK dmabuf/EGL paths.
+    changed |= set_env_default("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+    changed |= set_env_default("WEBKIT_DISABLE_COMPOSITING_MODE", "1");
+    if changed {
         logging!(
             info,
             Type::Setup,
-            "Detected NVIDIA GPU, set WEBKIT_DISABLE_DMABUF_RENDERER=1"
+            "Applied WebKit safe renderer ({reason}): WEBKIT_DISABLE_DMABUF_RENDERER=1, WEBKIT_DISABLE_COMPOSITING_MODE=1"
         );
+    }
+}
+
+pub fn apply_nvidia_dmabuf_renderer_workaround() {
+    if has_nvidia_gpu() {
+        enable_webkit_safe_renderer("NVIDIA GPU");
     }
 }
 
 /// AppImage + WebKitGTK frequently hits EGL_BAD_PARAMETER / blank windows on
 /// mixed GPU stacks; prefer the safer software path unless the user overrides.
 pub fn apply_appimage_webkit_workaround() {
-    if std::env::var_os("APPIMAGE").is_none() {
+    if env::var_os("APPIMAGE").is_none() {
         return;
     }
-    if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_some() {
-        return;
-    }
-
-    unsafe {
-        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
-    }
-    logging!(
-        info,
-        Type::Setup,
-        "Detected AppImage, set WEBKIT_DISABLE_DMABUF_RENDERER=1"
-    );
+    enable_webkit_safe_renderer("AppImage");
 }
 
 /// !Might cause more memory footpoint
@@ -57,12 +59,10 @@ pub fn apply_wayland_webkit_fix() {
         .ok()
         .and_then(|output| String::from_utf8(output.stdout).ok());
 
-    if let Some(v) = version
-        && v.trim() <= "1.23.0"
-    {
-        unsafe {
-            env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
-        }
+    // On Wayland, prefer the safe path broadly: version checks alone miss many
+    // blank-window cases (NVIDIA, hybrid GPU, nested compositors).
+    if version.is_some_and(|v| v.trim() <= "1.23.0") || has_nvidia_gpu() {
+        enable_webkit_safe_renderer("Wayland");
     }
 }
 
