@@ -224,11 +224,7 @@ pub fn run() {
     }
 
     #[cfg(target_os = "linux")]
-    utils::linux::workarounds::apply_appimage_webkit_workaround();
-    #[cfg(target_os = "linux")]
-    utils::linux::workarounds::apply_nvidia_dmabuf_renderer_workaround();
-    #[cfg(target_os = "linux")]
-    utils::linux::workarounds::apply_wayland_webkit_fix();
+    utils::linux::workarounds::apply_linux_webkit_workaround();
 
     let _ = utils::dirs::init_portable_flag();
 
