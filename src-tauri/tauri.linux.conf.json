@@ -5,7 +5,12 @@
     "targets": ["deb", "rpm", "appimage"],
     "linux": {
       "deb": {
-        "depends": ["openssl", "libayatana-appindicator3-1"],
+        "depends": [
+          "libssl3",
+          "libayatana-appindicator3-1",
+          "libwebkit2gtk-4.1-0",
+          "libgtk-3-0"
+        ],
         "desktopTemplate": "./packages/linux/clash-verge.desktop",
         "provides": ["clash-verge"],
         "conflicts": ["clash-verge"],

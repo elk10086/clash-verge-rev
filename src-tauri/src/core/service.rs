@@ -342,6 +342,14 @@ fn uninstall_service() -> Result<()> {
 fn install_service() -> Result<()> {
     logging!(info, Type::Service, "install service");
 
+    // AppImage mounts under /tmp/.mount_*; writing that into systemd ExecStart
+    // breaks after the next launch. Prefer the .deb package for TUN/service.
+    if std::env::var_os("APPIMAGE").is_some() {
+        bail!(
+            "Installing the system service from AppImage is unsupported because the mount path is ephemeral. Use the .deb package for TUN/service mode."
+        );
+    }
+
     let install_path = tauri::utils::platform::current_exe()?.with_file_name("clash-verge-service-install");
 
     if !install_path.exists() {

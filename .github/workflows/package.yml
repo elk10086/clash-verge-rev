@@ -145,8 +145,9 @@ jobs:
             artifact: linux-amd64
             path: target/x86_64-unknown-linux-gnu/release/bundle/deb/*.deb
           - id: linux-amd64-appimage
-            # Newer glib reduces tray symbol mismatches on modern host distros.
-            os: ubuntu-24.04
+            # Keep glibc baseline aligned with Debian 12 / Ubuntu 22.04.
+            # Tray libs are bundled explicitly so host ayatana/glib mismatches are avoided.
+            os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             bundle: appimage
             input: run_linux_amd64_appimage
