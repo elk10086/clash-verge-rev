@@ -8,7 +8,7 @@ use crate::{
 };
 use anyhow::{Context as _, Result, bail};
 use serde::{Deserialize, Serialize};
-use serde_yaml_ng::Mapping;
+use serde_yaml_ng::{Mapping, Value};
 use smartstring::alias::String;
 use std::time::Duration;
 use tokio::fs;
@@ -385,11 +385,20 @@ impl PrfItem {
         let data = data.trim_start_matches('\u{feff}');
 
         // check the data whether the valid yaml format
-        let yaml = serde_yaml_ng::from_str::<Mapping>(data).context("the remote profile data is invalid yaml")?;
+        let mut yaml = serde_yaml_ng::from_str::<Mapping>(data).context("the remote profile data is invalid yaml")?;
 
         if !yaml.contains_key("proxies") && !yaml.contains_key("proxy-providers") {
             bail!("profile does not contain `proxies` or `proxy-providers`");
         }
+
+        // `hy2` is widely used as a URI scheme and some subscription services
+        // also emit it as a YAML proxy type. Mihomo's YAML schema expects the
+        // canonical `hysteria2` value, so normalize only that alias.
+        let data = if normalize_hy2_proxy_types(&mut yaml) {
+            serde_yaml_ng::to_string(&yaml).context("failed to normalize hy2 proxy types")?
+        } else {
+            data.to_owned()
+        };
 
         if merge.is_none() {
             let merge_item = &mut Self::from_merge(None)?;
@@ -589,6 +598,26 @@ fn allow_auto_update_enabled(option: Option<&PrfOption>) -> bool {
     option.and_then(|o| o.allow_auto_update).unwrap_or(true)
 }
 
+fn normalize_hy2_proxy_types(yaml: &mut Mapping) -> bool {
+    let Some(Value::Sequence(proxies)) = yaml.get_mut("proxies") else {
+        return false;
+    };
+
+    let mut changed = false;
+    for proxy in proxies {
+        let Value::Mapping(proxy) = proxy else {
+            continue;
+        };
+        for (key, value) in proxy {
+            if key.as_str() == Some("type") && value.as_str() == Some("hy2") {
+                *value = Value::String("hysteria2".into());
+                changed = true;
+            }
+        }
+    }
+    changed
+}
+
 /// Fix URLs where query parameters are incorrectly appended to the path segment
 ///
 /// Incorrect Example: https://example.com/path&param1=value1
@@ -620,7 +649,8 @@ fn fix_dirty_url(input: &str) -> Result<Url> {
 
 #[cfg(test)]
 mod tests {
-    use super::{PrfOption, allow_auto_update_enabled};
+    use super::{PrfOption, allow_auto_update_enabled, normalize_hy2_proxy_types};
+    use serde_yaml_ng::Mapping;
 
     #[test]
     fn auto_update_defaults_to_enabled_and_preserves_explicit_false() {
@@ -631,5 +661,18 @@ mod tests {
             ..PrfOption::default()
         };
         assert!(!allow_auto_update_enabled(Some(&disabled)));
+    }
+
+    #[test]
+    fn normalizes_hy2_yaml_type_without_touching_hysteria2() -> Result<(), serde_yaml_ng::Error> {
+        let mut yaml: Mapping = serde_yaml_ng::from_str(
+            "proxies:\n  - { name: alias, type: hy2, server: example.com, port: 443 }\n  - { name: canonical, type: hysteria2, server: example.org, port: 443 }\n",
+        )?;
+
+        assert!(normalize_hy2_proxy_types(&mut yaml));
+        let output = serde_yaml_ng::to_string(&yaml)?;
+        assert!(output.contains("type: hysteria2"));
+        assert!(!output.contains("type: hy2\n"));
+        Ok(())
     }
 }
