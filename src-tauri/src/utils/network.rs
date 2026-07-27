@@ -10,6 +10,11 @@ use std::{sync::Arc, time::Duration};
 use sysproxy::Sysproxy;
 use tauri::Url;
 
+// Keep Free Verge as the primary identity while advertising Clash Verge
+// compatibility. Some subscription services otherwise omit Mihomo-only proxy
+// types such as Hysteria2 from their response.
+const DEFAULT_USER_AGENT: &str = concat!("free-verge clash-verge/v", env!("CARGO_PKG_VERSION"));
+
 #[derive(Debug)]
 pub struct HttpResponse {
     status: StatusCode,
@@ -276,7 +281,7 @@ impl NetworkManager {
         if let Some(ua) = user_agent {
             headers.insert(USER_AGENT, HeaderValue::from_str(ua.as_str())?);
         } else {
-            headers.insert(USER_AGENT, HeaderValue::from_static("free-verge"));
+            headers.insert(USER_AGENT, HeaderValue::from_static(DEFAULT_USER_AGENT));
         }
 
         self.build_client(proxy_url, headers, accept_invalid_certs, timeout_secs, tls_root_mode)
@@ -318,5 +323,18 @@ impl NetworkManager {
                 }),
             Err(err) => Err(err),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::DEFAULT_USER_AGENT;
+
+    #[test]
+    fn default_user_agent_keeps_free_verge_identity_and_clash_compatibility() {
+        assert_eq!(
+            DEFAULT_USER_AGENT,
+            concat!("free-verge clash-verge/v", env!("CARGO_PKG_VERSION"))
+        );
     }
 }
